@@ -1,0 +1,8 @@
+uploads = []
+generated = []
+
+[[outputs]]
+id = "pkCpr4nyBYz3DpkOFmPRZ"
+uri = "file://RyzzUBot-updated.tar.gz"
+type = "unspecified"
+title = "RyzzUBot — Updated Project"

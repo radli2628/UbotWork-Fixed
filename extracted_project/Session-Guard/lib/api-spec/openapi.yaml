@@ -1,0 +1,918 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: Telegram Broadcast Bot API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: Auth
+    description: Browser and mobile authentication endpoints.
+  - name: health
+    description: Health operations
+  - name: stats
+    description: Dashboard statistics
+  - name: bots
+    description: Telegram bot management
+  - name: subscribers
+    description: Subscriber management
+  - name: broadcasts
+    description: Broadcast message management
+  - name: plans
+    description: Subscription plan management
+  - name: paymentRequests
+    description: Payment request management
+  - name: tokens
+    description: Token management
+  - name: userbots
+    description: UserBot MTProto session management
+
+paths:
+  /auth/user:
+    get:
+      tags: [Auth]
+      operationId: getCurrentAuthUser
+      summary: Get the currently authenticated user
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '200':
+          description: Auth status resolved successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthUserEnvelope'
+  /login:
+    get:
+      tags: [Auth]
+      operationId: beginBrowserLogin
+      summary: Start the browser OIDC login flow
+      parameters:
+        - name: returnTo
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        '302':
+          description: Redirect to the OIDC authorization endpoint.
+  /callback:
+    get:
+      tags: [Auth]
+      operationId: handleBrowserLoginCallback
+      summary: Complete the browser OIDC login flow
+      parameters:
+        - name: code
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: state
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: iss
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uri
+      responses:
+        '302':
+          description: Redirect to the returnTo path on success or /api/login on failure.
+  /logout:
+    get:
+      tags: [Auth]
+      operationId: logoutBrowserSession
+      summary: Clear the session and begin OIDC logout
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+        - $ref: '#/components/parameters/SessionCookie'
+      responses:
+        '302':
+          description: Redirect to the OIDC provider logout URL.
+  /mobile-auth/token-exchange:
+    post:
+      tags: [Auth]
+      operationId: exchangeMobileAuthorizationCode
+      summary: Exchange a mobile OIDC code for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MobileTokenExchangeRequest'
+      responses:
+        '200':
+          description: Session created successfully.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MobileTokenExchangeSuccess'
+        '400':
+          description: Missing or invalid required fields.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Token did not contain usable claims.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Token exchange failed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /mobile-auth/logout:
+    post:
+      tags: [Auth]
+      operationId: logoutMobileSession
+      summary: Delete a mobile session token
+      parameters:
+        - $ref: '#/components/parameters/AuthorizationSessionHeader'
+      responses:
+        '200':
+          description: Logout processed.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutSuccess'
+
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /stats:
+    get:
+      operationId: getDashboardStats
+      tags: [stats]
+      summary: Get dashboard statistics
+      responses:
+        "200":
+          description: Dashboard stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DashboardStats"
+
+  /bots:
+    get:
+      operationId: listBots
+      tags: [bots]
+      summary: List all bots
+      responses:
+        "200":
+          description: List of bots
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Bot"
+    post:
+      operationId: createBot
+      tags: [bots]
+      summary: Register a new bot
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBotRequest"
+      responses:
+        "201":
+          description: Bot created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "400":
+          description: Bad request
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /bots/{botId}:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: getBot
+      tags: [bots]
+      summary: Get a bot by ID
+      responses:
+        "200":
+          description: Bot details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+        "404":
+          description: Not found
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+    put:
+      operationId: updateBot
+      tags: [bots]
+      summary: Update bot settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateBotRequest"
+      responses:
+        "200":
+          description: Updated bot
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Bot"
+    delete:
+      operationId: deleteBot
+      tags: [bots]
+      summary: Delete a bot
+      responses:
+        "204":
+          description: Deleted
+
+  /bots/{botId}/setup-webhook:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    post:
+      operationId: setupWebhook
+      tags: [bots]
+      summary: Register Telegram webhook for a bot
+      responses:
+        "200":
+          description: Webhook registered
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/WebhookSetupResponse"
+
+  /bots/{botId}/subscribers:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listSubscribers
+      tags: [subscribers]
+      summary: List subscribers for a bot
+      responses:
+        "200":
+          description: Subscriber list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Subscriber"
+    post:
+      operationId: addSubscriber
+      tags: [subscribers]
+      summary: Add a subscriber
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AddSubscriberRequest"
+      responses:
+        "201":
+          description: Added subscriber
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Subscriber"
+
+  /bots/{botId}/subscribers/{subscriberId}:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - $ref: "#/components/parameters/SubscriberId"
+    delete:
+      operationId: removeSubscriber
+      tags: [subscribers]
+      summary: Remove a subscriber
+      responses:
+        "204":
+          description: Removed
+
+  /bots/{botId}/broadcasts:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listBroadcasts
+      tags: [broadcasts]
+      summary: List broadcasts for a bot
+      responses:
+        "200":
+          description: Broadcast list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Broadcast"
+    post:
+      operationId: createBroadcast
+      tags: [broadcasts]
+      summary: Create and send a broadcast
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateBroadcastRequest"
+      responses:
+        "201":
+          description: Broadcast queued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broadcast"
+
+  /bots/{botId}/broadcasts/{broadcastId}:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - $ref: "#/components/parameters/BroadcastId"
+    get:
+      operationId: getBroadcast
+      tags: [broadcasts]
+      summary: Get broadcast details
+      responses:
+        "200":
+          description: Broadcast details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Broadcast"
+
+  /bots/{botId}/plans:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listPlans
+      tags: [plans]
+      summary: List plans for a bot
+      responses:
+        "200":
+          description: Plan list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Plan"
+    post:
+      operationId: createPlan
+      tags: [plans]
+      summary: Create a subscription plan
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreatePlanRequest"
+      responses:
+        "201":
+          description: Plan created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Plan"
+
+  /bots/{botId}/plans/{planId}:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - $ref: "#/components/parameters/PlanId"
+    delete:
+      operationId: deletePlan
+      tags: [plans]
+      summary: Delete a plan
+      responses:
+        "204":
+          description: Deleted
+
+  /bots/{botId}/payment-requests:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listPaymentRequests
+      tags: [paymentRequests]
+      summary: List payment requests for a bot
+      responses:
+        "200":
+          description: Payment request list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/PaymentRequest"
+
+  /bots/{botId}/payment-requests/{requestId}/approve:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      operationId: approvePaymentRequest
+      tags: [paymentRequests]
+      summary: Approve a payment request and issue a token
+      responses:
+        "200":
+          description: Approved and token issued
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ApprovePaymentResponse"
+
+  /bots/{botId}/payment-requests/{requestId}/reject:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - $ref: "#/components/parameters/RequestId"
+    post:
+      operationId: rejectPaymentRequest
+      tags: [paymentRequests]
+      summary: Reject a payment request
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RejectPaymentRequest"
+      responses:
+        "200":
+          description: Rejected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SuccessResponse"
+
+  /bots/{botId}/tokens:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listTokens
+      tags: [tokens]
+      summary: List tokens for a bot
+      responses:
+        "200":
+          description: Token list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Token"
+
+  /bots/{botId}/userbots:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+    get:
+      operationId: listUserbots
+      tags: [userbots]
+      summary: List userbots (MTProto sessions) for a bot
+      responses:
+        "200":
+          description: Userbot list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Userbot"
+
+  /bots/{botId}/userbots/{chatId}:
+    parameters:
+      - $ref: "#/components/parameters/BotId"
+      - name: chatId
+        in: path
+        required: true
+        schema:
+          type: string
+    delete:
+      operationId: revokeUserbot
+      tags: [userbots]
+      summary: Revoke a userbot session
+      responses:
+        "204":
+          description: Revoked
+
+components:
+  parameters:
+    AuthorizationSessionHeader:
+      name: Authorization
+      in: header
+      required: false
+      schema:
+        type: string
+        description: 'Bearer <session-token> for mobile clients'
+    SessionCookie:
+      name: sid
+      in: cookie
+      required: false
+      schema:
+        type: string
+    BotId:
+      name: botId
+      in: path
+      required: true
+      schema:
+        type: integer
+    SubscriberId:
+      name: subscriberId
+      in: path
+      required: true
+      schema:
+        type: integer
+    BroadcastId:
+      name: broadcastId
+      in: path
+      required: true
+      schema:
+        type: integer
+    PlanId:
+      name: planId
+      in: path
+      required: true
+      schema:
+        type: integer
+    RequestId:
+      name: requestId
+      in: path
+      required: true
+      schema:
+        type: integer
+
+  schemas:
+    AuthUser:
+      type: object
+      required: [id, email, firstName, lastName, profileImageUrl]
+      properties:
+        id:
+          type: string
+        email:
+          type: [string, 'null']
+          format: email
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        profileImageUrl:
+          type: [string, 'null']
+    AuthUserEnvelope:
+      type: object
+      required: [user]
+      properties:
+        user:
+          oneOf:
+            - $ref: '#/components/schemas/AuthUser'
+            - type: 'null'
+    MobileTokenExchangeRequest:
+      type: object
+      required: [code, code_verifier, redirect_uri, state]
+      properties:
+        code:
+          type: string
+          minLength: 1
+        code_verifier:
+          type: string
+          minLength: 1
+        redirect_uri:
+          type: string
+          minLength: 1
+          format: uri
+        state:
+          type: string
+          minLength: 1
+        nonce:
+          type: string
+          minLength: 1
+    MobileTokenExchangeSuccess:
+      type: object
+      required: [token]
+      properties:
+        token:
+          type: string
+    LogoutSuccess:
+      type: object
+      required: [success]
+      properties:
+        success:
+          type: boolean
+          const: true
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required: [status]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+      required: [error]
+
+    SuccessResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required: [success]
+
+    DashboardStats:
+      type: object
+      properties:
+        totalBots:
+          type: integer
+        totalSubscribers:
+          type: integer
+        pendingRequests:
+          type: integer
+        totalTokens:
+          type: integer
+        activeTokens:
+          type: integer
+        totalBroadcasts:
+          type: integer
+      required:
+        - totalBots
+        - totalSubscribers
+        - pendingRequests
+        - totalTokens
+        - activeTokens
+        - totalBroadcasts
+
+    Bot:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        token:
+          type: string
+        username:
+          type: [string, 'null']
+        superuserChatId:
+          type: [string, 'null']
+        paymentInfo:
+          type: [string, 'null']
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, name, token, isActive, createdAt, updatedAt]
+
+    CreateBotRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        token:
+          type: string
+      required: [name, token]
+
+    UpdateBotRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        superuserChatId:
+          type: string
+        paymentInfo:
+          type: string
+
+    WebhookSetupResponse:
+      type: object
+      properties:
+        webhookUrl:
+          type: string
+      required: [webhookUrl]
+
+    Subscriber:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        chatId:
+          type: string
+        username:
+          type: [string, 'null']
+        firstName:
+          type: [string, 'null']
+        lastName:
+          type: [string, 'null']
+        isActive:
+          type: boolean
+        subscribedAt:
+          type: string
+          format: date-time
+      required: [id, botId, chatId, isActive, subscribedAt]
+
+    AddSubscriberRequest:
+      type: object
+      properties:
+        chatId:
+          type: string
+        username:
+          type: string
+        firstName:
+          type: string
+        lastName:
+          type: string
+      required: [chatId]
+
+    Broadcast:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        message:
+          type: string
+        status:
+          type: string
+          enum: [draft, sending, completed, failed]
+        totalRecipients:
+          type: integer
+        sentCount:
+          type: integer
+        failedCount:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        completedAt:
+          type: [string, 'null']
+          format: date-time
+      required: [id, botId, message, status, totalRecipients, sentCount, failedCount, createdAt]
+
+    CreateBroadcastRequest:
+      type: object
+      properties:
+        message:
+          type: string
+      required: [message]
+
+    Plan:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        name:
+          type: string
+        durationMonths:
+          type: integer
+        price:
+          type: string
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, botId, name, durationMonths, price, isActive, createdAt]
+
+    CreatePlanRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        durationMonths:
+          type: integer
+        price:
+          type: string
+      required: [name, durationMonths, price]
+
+    PaymentRequest:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        chatId:
+          type: string
+        telegramUsername:
+          type: [string, 'null']
+        telegramFirstName:
+          type: [string, 'null']
+        planId:
+          type: integer
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        rejectionReason:
+          type: [string, 'null']
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, botId, chatId, planId, status, createdAt, updatedAt]
+
+    ApprovePaymentResponse:
+      type: object
+      properties:
+        token:
+          $ref: "#/components/schemas/Token"
+      required: [token]
+
+    RejectPaymentRequest:
+      type: object
+      properties:
+        reason:
+          type: string
+
+    Token:
+      type: object
+      properties:
+        id:
+          type: integer
+        token:
+          type: string
+        botId:
+          type: integer
+        planId:
+          type: integer
+        paymentRequestId:
+          type: [integer, 'null']
+        isActivated:
+          type: boolean
+        activatedByChatId:
+          type: [string, 'null']
+        activatedAt:
+          type: [string, 'null']
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+      required: [id, token, botId, planId, isActivated, expiresAt, createdAt]
+
+    Userbot:
+      type: object
+      properties:
+        id:
+          type: integer
+        botId:
+          type: integer
+        chatId:
+          type: string
+        phone:
+          type: string
+        telegramUserId:
+          type: [string, 'null']
+        telegramUsername:
+          type: [string, 'null']
+        telegramFirstName:
+          type: [string, 'null']
+        isActive:
+          type: boolean
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+      required: [id, botId, chatId, phone, isActive, createdAt, updatedAt]
