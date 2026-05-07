@@ -21,6 +21,7 @@ import {
   SETTING_HINTS,
 } from "./botSettings";
 import type { EditableSettingKey } from "./botSettings";
+import { withPremiumEmojis } from "../lib/premiumEmoji";
 import {
   sendPhoneCode,
   signInWithCode,
@@ -838,7 +839,7 @@ export async function handleUpdate(
       .where(eq(botsTable.id, botId));
     if (!bot) return;
 
-    const settings = await getSettings(botId);
+    const settings = withPremiumEmojis(await getSettings(botId));
 
     // ── Callback queries ───────────────────────────────────────────────────────
     if (update.callback_query) {
