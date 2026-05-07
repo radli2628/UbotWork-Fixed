@@ -15,7 +15,11 @@ export type EditableSettingKey =
   | "planEmoji"
   | "tokenEmoji"
   | "paymentEmoji"
-  | "pendingEmoji";
+  | "pendingEmoji"
+  | "commandPrefix";
+
+export const ALLOWED_PREFIXES = [".", ",", "?", "!", "/"] as const;
+export type AllowedPrefix = (typeof ALLOWED_PREFIXES)[number];
 
 export const SETTING_LABELS: Record<EditableSettingKey, string> = {
   welcomeText: "Welcome Message",
@@ -31,6 +35,7 @@ export const SETTING_LABELS: Record<EditableSettingKey, string> = {
   tokenEmoji: "Token Emoji",
   paymentEmoji: "Payment Emoji",
   pendingEmoji: "Pending Emoji",
+  commandPrefix: "Command Prefix",
 };
 
 export const SETTING_HINTS: Record<EditableSettingKey, string> = {
@@ -47,6 +52,7 @@ export const SETTING_HINTS: Record<EditableSettingKey, string> = {
   tokenEmoji: "Emoji for token messages (single emoji).",
   paymentEmoji: "Emoji for payment messages (single emoji).",
   pendingEmoji: "Emoji for pending/waiting messages (single emoji).",
+  commandPrefix: `Trigger character for commands. Allowed values: . , ? ! /`,
 };
 
 export async function getSettings(botId: number): Promise<BotSettings> {

@@ -19,6 +19,7 @@ import {
   renderTemplate,
   SETTING_LABELS,
   SETTING_HINTS,
+  ALLOWED_PREFIXES,
 } from "./botSettings";
 import type { EditableSettingKey } from "./botSettings";
 import { withPremiumEmojis } from "../lib/premiumEmoji";
@@ -580,7 +581,8 @@ async function sendOwnerPanel(bot: Bot, chatId: string) {
   );
 }
 
-async function editOwnerCustomize(bot: Bot, chatId: string, messageId: number) {
+async function editOwnerCustomize(bot: Bot, chatId: string, messageId: number, settings?: BotSettings) {
+  const prefix = settings?.commandPrefix ?? "/";
   await editMessage(
     bot.token, chatId, messageId,
     `⚙️ <b>Customize ${bot.name}</b>\n\nWhat would you like to change?`,
@@ -590,6 +592,9 @@ async function editOwnerCustomize(bot: Bot, chatId: string, messageId: number) {
           [
             { text: "📝 Messages", callback_data: "owner_msgs" },
             { text: "😀 Emojis", callback_data: "owner_emojis" },
+          ],
+          [
+            { text: `🔧 Command Prefix [${prefix}]`, callback_data: "owner_set:commandPrefix" },
           ],
           [{ text: "← Back", callback_data: "owner_menu" }],
         ],
@@ -686,15 +691,16 @@ async function handleSuperuserCommand(
   text: string,
   settings: BotSettings,
 ) {
+  const p = settings.commandPrefix;
   const parts = text.trim().split(/\s+/);
   const cmd = parts[0]?.toLowerCase();
 
-  if (cmd === "/pending" || cmd === "/owner") {
+  if (cmd === `${p}pending` || cmd === `${p}owner`) {
     await sendOwnerPanel(bot, chatId);
     return;
   }
 
-  if (cmd === "/approve" && parts[1]) {
+  if (cmd === `${p}approve` && parts[1]) {
     const reqId = Number(parts[1]);
     if (Number.isNaN(reqId)) {
       await sendMessage(bot.token, chatId, "❌ Invalid request ID.");
@@ -767,7 +773,7 @@ async function handleSuperuserCommand(
     return;
   }
 
-  if (cmd === "/reject" && parts[1]) {
+  if (cmd === `${p}reject` && parts[1]) {
     const reqId = Number(parts[1]);
     if (Number.isNaN(reqId)) {
       await sendMessage(bot.token, chatId, "❌ Invalid request ID.");
@@ -1204,7 +1210,7 @@ export async function handleUpdate(
         }
 
         if (data === "owner_customize") {
-          await editOwnerCustomize(bot, chatId, messageId);
+          await editOwnerCustomize(bot, chatId, messageId, settings);
           return;
         }
         if (data === "owner_msgs") {
@@ -1245,9 +1251,10 @@ export async function handleUpdate(
         }
 
         if (data === "owner_help") {
+          const hp = settings.commandPrefix;
           await editMessage(
             bot.token, chatId, messageId,
-            `❓ <b>Admin Help</b>\n\n<b>Commands:</b>\n/owner — Open this panel\n/pending — See pending payments\n/approve &lt;id&gt; — Approve a request\n/reject &lt;id&gt; [reason] — Reject a request\n\n<b>Customization:</b>\nUse "Customize Bot" to edit message templates and emojis.`,
+            `❓ <b>Admin Help</b>\n\n<b>Commands (prefix: <code>${hp}</code>):</b>\n<code>${hp}owner</code> — Open this panel\n<code>${hp}pending</code> — See pending payments\n<code>${hp}approve &lt;id&gt;</code> — Approve a request\n<code>${hp}reject &lt;id&gt; [reason]</code> — Reject a request\n\n<b>Customization:</b>\nUse "Customize Bot" to edit message templates, emojis, and command prefix.`,
             {
               reply_markup: {
                 inline_keyboard: [[{ text: "← Back", callback_data: "owner_menu" }]],
@@ -1313,7 +1320,9 @@ export async function handleUpdate(
         bot.superuserChatId != null && chatId === bot.superuserChatId;
 
       // /start command
-      if (text === "/start" || text.startsWith("/start ")) {
+      const p = settings.commandPrefix;
+
+      if (text === `${p}start` || text.startsWith(`${p}start `)) {
         const active = await getActiveToken(bot.id, chatId);
         if (active) {
           await sendSubscriberMenu(bot, chatId, firstName, settings);
@@ -1323,14 +1332,14 @@ export async function handleUpdate(
         return;
       }
 
-      // /owner command
-      if (text === "/owner") {
+      // {prefix}owner command
+      if (text === `${p}owner`) {
         await handleOwnerCommand(bot, chatId);
         return;
       }
 
       // Superuser text commands
-      if (isSuperuser && text.startsWith("/")) {
+      if (isSuperuser && text.startsWith(p)) {
         await handleSuperuserCommand(bot, chatId, text, settings);
         return;
       }
@@ -1343,12 +1352,26 @@ export async function handleUpdate(
       if (state === "editing_setting") {
         const key = sessionData["settingKey"] as EditableSettingKey | undefined;
         if (key && key in SETTING_LABELS) {
-          await saveSetting(bot.id, key, text.trim());
+          const value = text.trim();
+
+          // Validate commandPrefix — only allow . , ? ! /
+          if (key === "commandPrefix") {
+            if (!(ALLOWED_PREFIXES as readonly string[]).includes(value)) {
+              await sendMessage(
+                bot.token,
+                chatId,
+                `${settings.errorEmoji} Invalid prefix <code>${value}</code>.\n\nAllowed values: <code>. , ? ! /</code>\n\nSend one of those characters, or send ${p}cancel to abort.`,
+              );
+              return;
+            }
+          }
+
+          await saveSetting(bot.id, key, value);
           await upsertSession(bot.id, chatId, "idle");
           await sendMessage(
             bot.token,
             chatId,
-            `${settings.successEmoji} <b>${SETTING_LABELS[key]}</b> updated!\n\nNew value: ${text.trim()}`,
+            `${settings.successEmoji} <b>${SETTING_LABELS[key]}</b> updated!\n\nNew value: <code>${value}</code>`,
           );
           await sendOwnerPanel(bot, chatId);
         }
@@ -1357,7 +1380,7 @@ export async function handleUpdate(
 
       // ── Awaiting reject reason (superuser entering rejection reason)
       if (state === "awaiting_reject_reason") {
-        if (text === "/cancel") {
+        if (text === `${p}cancel`) {
           await upsertSession(bot.id, chatId, "idle");
           await sendOwnerPanel(bot, chatId);
           return;
